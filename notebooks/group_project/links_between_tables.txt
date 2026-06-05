@@ -1,0 +1,34 @@
+How the Group A (yogurt study) tables are linked
+=================================================
+
+There are four CSV files. They are connected through two key columns:
+  pid        — a participant ID (e.g. pid_01, pid_02, ...)
+  sample_id  — a unique code for each biological sample
+
+Here is how they fit together:
+
+  File 0: sample_ids  (<-- hub -- every other file joins to this one)
+    Columns: pid, time_point, arm, sample_id
+    Has BOTH pid and sample_id, so it acts as the bridge.
+
+  File 1: participant_metadata
+    Columns: pid, arm, days_since_last_sex, birth_control, age, education, sex
+    Joined TO sample_ids USING: pid, arm
+    → This adds participant demographics to each sample.
+
+  File 2: qpcr_results
+    Columns: sample_id, qpcr_bacteria, qpcr_crispatus, qpcr_iners
+    Joined TO sample_ids USING: sample_id
+    → One row per sample, so this is a one-to-one join.
+
+  File 3: luminex_results
+    Columns: sample_id, cytokine, conc, limits
+    Joined TO sample_ids USING: sample_id
+    → 10 rows per sample (one per cytokine), so this is a one-to-many join.
+
+To join everything into one big table, start from sample_ids and work outward:
+
+  sample_ids %>%
+    left_join(participant_metadata, by = c("pid", "arm")) %>%
+    left_join(qpcr_results, by = "sample_id") %>%
+    left_join(luminex_results, by = "sample_id")

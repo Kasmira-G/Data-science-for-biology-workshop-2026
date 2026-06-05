@@ -23,26 +23,61 @@ library(here)
 
 ## Part 1 — Run a chunk, write a sentence, render
 
+
+# R treats ** 'to the power off' 2 ** 10 is 2 multiplied by itself 10 times
+
+# The brackets changed the order in which the code is being processed (BODMAS)
 ```{r}
-# your code here
+3 + 5 + 10
+10 * (5 + 1)
+2 ** 10
+
+64 / 2 + 2
+64 / (2 + 2)
 ```
 
 ## Part 2 — Read the data and look at it
 
 ```{r}
-# your code here
+table_02 <- read_csv(here("data/instructional_dataset/02_visit_clinical_measurements_UKZN_workshop_2023.csv"))
+
+table_02
+
+glimpse (table_02)
 ```
+
+# There are 132 rows (each PIDs) and 6 columns (pid, timepoint, arm, nugent_score, crp_blood, ph)
 
 ## Part 3 — Pull out columns and summarise them
 
 ```{r}
-# your code here
+table_02$nugent_score
+
+mean(table_02$crp_blood, na.rm = TRUE) # skips missing values 
+mean(table_02$crp_blood)
+
+# removing na.rm = true did not change the value of the mean since there probably was not any missing values
+
+crp_mean <- mean(table_02$crp_blood, na.rm = TRUE)
+crp_mean
+
+#the crp_mean 1.470379
 ```
 
 ## Part 4 — Build something with Pi
 
 ```{r}
-# your code here
+# Load the data                                                                        
+   library(dplyr)                                                                         
+                                                                                          
+   measurements <-                                                                        
+ read.csv("data/instructional_dataset/02_visit_clinical_measurements_UKZN_workshop_2023.csv")                                                                                                                                                                     
+   # Check it loaded okay                                                                 
+   head(measurements)                                                                                                                                                   
+   # Mean nugent_score by arm                                                             
+   measurements |>                                                                        
+     group_by(arm) |>                                                                     
+     summarise(mean_nugent = mean(nugent_score, na.rm = TRUE)) 
 ```
 
 ## Capstone — make it your own

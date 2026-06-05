@@ -27,30 +27,29 @@ table_02
 
 **1. After `table_02 |> group_by(pid) |> summarise(mean_ph = mean(ph))`:**
 
-*Your answer:*
+*44 PIDs and each row presents each participant*
 
 **2. After `table_02 |> group_by(arm, time_point) |> summarise(mean_ph = mean(ph))`:**
 
-*Your answer:*
+*6 rows and each row represents an arm (2) and by timepoint (3)*
 
 **3. After `per_person |> left_join(table_01, by = "pid")`, where `per_person` is the 44-row result from prediction 1:**
 
-*Your answer:*
+*44 rows and each row is the participant*
 
 **4. After `arm_timepoint |> pivot_wider(names_from = time_point, values_from = mean_ph)`, where `arm_timepoint` is the 6-row result from prediction 2:**
 
-*Your answer:*
+**
 
 ## Part 2 — Build the pipeline
 
 ```{r}
-# step 1: pipe table_02 into head() to see the starting shape
+table_02 |> head()
 ```
 
 ```{r}
-# step 2: group_by(pid) |> summarise(mean_ph = mean(ph), mean_nugent = mean(nugent_score))
+table_02 |> group_by(pid) |> summarize(mean_ph = mean(ph), mean_nugent = mean(nugent_score))
 # assign it to per_person so step 3 can use it
-per_person <- NULL  # replace NULL with the pipeline
 per_person
 ```
 

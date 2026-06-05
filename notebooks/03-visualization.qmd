@@ -19,18 +19,19 @@ table_02 <- read_csv(here("data/instructional_dataset/02_visit_clinical_measurem
 ## Part 1 — Read two plots (no code)
 
 ```{r}
-#| echo: false
+#| echo: false 
 #| fig-width: 6
 #| fig-height: 4
 ggplot(table_02, aes(x = ph, y = nugent_score, color = arm)) +
   geom_jitter()
+
 ```
 
 **Plot 1 (above). Answer in plain words:**
 
-1. What is the mark?
-2. What mark property comes from what column?
-3. How many rows of data made each mark?
+1. What is the mark? the round dots
+2. What mark property comes from what column? the ph and the nugent score
+3. How many rows of data made each mark? 132 rows
 
 ```{r}
 #| echo: false
@@ -41,6 +42,10 @@ ggplot(table_02, aes(x = arm, y = ph, fill = arm)) +
 ```
 
 **Plot 2 (above). Answer the same three questions.**
+1. The mark is the box and range which shows the summary of the data
+2. The arm and the ph
+3. 132 rows
+
 
 **Sketch.** Draw on paper or describe in words a plot that answers "does pH differ between treatment arms?" Name the mark, the mappings, and how many rows make each mark.
 

@@ -1,0 +1,708 @@
+---
+title: "Group A — Yogurt Study Data Dictionary"
+subtitle: "Understanding every column in the dataset"
+format:
+  html:
+    toc: true
+    code-fold: true
+    embed-resources: true
+editor: source
+---
+
+## Overview
+
+This document describes every CSV file in the **Group A (yogurt study)** dataset.
+There are four files, linked together by participant IDs (`pid`) and sample IDs
+(`sample_id`).
+
+```{r}
+#| label: setup
+#| message: false
+
+library(tidyverse)
+
+# Helper to read CSVs cleanly
+read_data <- function(path) {
+  read_csv(file.path("../../data/group_a_yogurt", path), show_col_types = FALSE)
+}
+```
+
+---
+
+## File 0 — Sample IDs (`00_sample_ids_yogurt.csv`)
+
+```{r}
+#| label: load-sample-ids
+
+sample_ids <- read_data("00_sample_ids_yogurt.csv")
+sample_ids
+```
+
+### What one row represents
+
+**One biological sample** collected from a participant at a specific time point.
+Each of the 51 participants contributes **two** samples (baseline + after
+antibiotic), for a total of 102 rows.
+
+### Columns
+
+| Column       | Type   | What it means |
+|--------------|--------|---------------|
+| `pid`        | chr    | Participant ID — links to the metadata table (File 1) |
+| `time_point` | chr    | When the sample was collected — either `baseline` or `after_antibiotic` |
+| `arm`        | chr    | Which group the participant was assigned to — `yogurt` or `unchanged_diet` |
+| `sample_id`  | chr    | Unique sample code — links to the qPCR (File 2) and Luminex (File 3) tables |
+
+```{r}
+#| label: explore-sample-ids
+
+# How many samples per time point and arm?
+sample_ids |>
+  count(time_point, arm)
+```
+
+---
+
+## File 1 — Participant Metadata (`01_participant_metadata_yogurt.csv`)
+
+```{r}
+#| label: load-metadata
+
+metadata <- read_data("01_participant_metadata_yogurt.csv")
+metadata
+```
+
+### What one row represents
+
+**One participant** (a woman enrolled in the study). There are 51 participants.
+
+### Columns
+
+| Column               | Type   | What it means |
+|----------------------|--------|---------------|
+| `pid`                | chr    | Participant ID — links to the sample IDs table |
+| `arm`                | chr    | Group assignment — `yogurt` or `unchanged_diet` (26 yogurt, 25 unchanged) |
+| `days_since_last_sex`| num   | Number of days since the participant's most recent sexual activity (range: 1–48) |
+| `birth_control`      | chr    | Type of birth control used — `no hormonal birth control` or `Depoprovera` |
+| `age`                | num   | Age in years (range: 24–37) |
+| `education`          | chr    | Highest education level — one of `less than grade 9`, `grade 10-12, matriculated`, `grade 10-12, not matriculated`, or `post-secondary` |
+| `sex`                | chr    | All participants are `female` |
+
+```{r}
+#| label: explore-metadata
+
+metadata |>
+  count(arm, birth_control)
+
+metadata |>
+  summarise(
+    n_participants = n(),
+    age_min = min(age),
+    age_max = max(age),
+    age_mean = mean(age),
+    days_since_sex_min = min(days_since_last_sex),
+    days_since_sex_max = max(days_since_last_sex)
+  )
+
+metadata |>
+  count(education)
+```
+
+---
+
+## File 2 — qPCR Results (`02_qpcr_results_yogurt.csv`)
+
+```{r}
+#| label: load-qpcr
+
+qpcr <- read_data("02_qpcr_results_yogurt.csv")
+qpcr
+```
+
+### What one row represents
+
+**Quantitative PCR measurements for one sample.** There are 102 rows — one per
+sample.
+
+### Columns
+
+| Column           | Type   | What it means |
+|------------------|--------|---------------|
+| `sample_id`      | chr    | Sample code — links to the sample IDs table |
+| `qpcr_bacteria`  | num   | Total bacterial load measured by qPCR (16S rRNA gene copies) |
+| `qpcr_crispatus` | num   | Abundance of *Lactobacillus crispatus* (a beneficial vaginal bacterium) |
+| `qpcr_iners`     | num   | Abundance of *Lactobacillus iners* (another *Lactobacillus* species common in the vaginal microbiome) |
+
+```{r}
+#| label: explore-qpcr
+
+# Join with sample IDs to see which arm each qPCR result belongs to
+qpcr_with_arm <- sample_ids |>
+  select(sample_id, time_point, arm) |>
+  inner_join(qpcr, by = "sample_id")
+
+qpcr_with_arm |>
+  group_by(time_point, arm) |>
+  summarise(
+    n = n(),
+    mean_total_bacteria = mean(qpcr_bacteria),
+    mean_crispatus = mean(qpcr_crispatus),
+    mean_iners = mean(qpcr_iners),
+    .groups = "drop"
+  )
+```
+
+---
+
+## File 3 — Luminex Cytokine Results (`03_luminex_results_yogurt.csv`)
+
+```{r}
+#| label: load-luminex
+
+luminex <- read_data("03_luminex_results_yogurt.csv")
+luminex
+```
+
+### What one row represents
+
+**One cytokine measurement for one sample.** The table is in **long (tidy)
+format**: each row is a single concentration value. There are 10 cytokines ×
+102 samples = 1020 rows.
+
+### Columns
+
+| Column      | Type   | What it means |
+|-------------|--------|---------------|
+| `sample_id` | chr    | Sample code — links to the sample IDs table |
+| `cytokine`  | chr    | Name of the cytokine or chemokine measured — one of: `IL-1a`, `IL-1b`, `IL-6`, `IL-8`, `IL-10`, `TNFa`, `IFN-Y`, `IP-10`, `MIG`, `MIP-3a` |
+| `conc`      | num   | Concentration of that cytokine (units depend on the assay, e.g. pg/mL) |
+| `limits`    | chr    | Whether the concentration falls within the detectable range — `within limits` or `out of range` |
+
+```{r}
+#| label: explore-luminex
+
+# How many samples per cytokine, and how many are out of range?
+luminex |>
+  count(cytokine, limits) |>
+  pivot_wider(names_from = limits, values_from = n)
+
+# Join with arm info and summarise
+luminex_with_arm <- sample_ids |>
+  select(sample_id, time_point, arm) |>
+  inner_join(luminex, by = "sample_id")
+
+luminex_with_arm |>
+  group_by(time_point, arm, cytokine) |>
+  summarise(
+    mean_conc = mean(conc, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  slice_max(mean_conc, n = 5)
+```
+
+---
+
+## How the files connect
+
+Here is a diagram of how the four tables relate to each other:
+
+```
+ ┌─────────────────────┐
+ │ File 0: sample_ids  │ ◄── pid ────┐
+ │  (102 rows, 4 cols) │             │
+ └─────┬──────┬───────┘             │
+       │      │                      │
+  sample_id  sample_id               │
+       │      │                      │
+       ▼      ▼                      │
+ ┌─────────┐ ┌──────────────┐  ┌────┴──────────────────┐
+ │ File 2: │ │ File 3:      │  │ File 1: metadata       │
+ │ qPCR    │ │ Luminex      │  │ (51 rows, 7 cols)      │
+ │ (102 r) │ │ (1020 r)     │  │                         │
+ └─────────┘ └──────────────┘  └─────────────────────────┘
+```
+
+- **File 1** holds one row per **participant** (51 participants).
+- **File 0** links participants to their samples (2 samples each → 102 rows).
+- **Files 2 and 3** hold lab measurements keyed by `sample_id`.
+
+```{r}
+#| label: join-all-tables
+#| message: false
+#| warning: false
+
+# One big joined table for exploration
+all_data <- sample_ids |>
+  left_join(metadata, by = c("pid", "arm")) |>
+  left_join(qpcr, by = "sample_id") |>
+  left_join(luminex, by = "sample_id")
+
+glimpse(all_data)
+```
+
+---
+
+## Glossary of abbreviations
+
+| Abbreviation | Full meaning |
+|--------------|---------------|
+| qPCR         | Quantitative polymerase chain reaction — a lab method to measure DNA amounts |
+| *L. crispatus* | *Lactobacillus crispatus* — a bacterium linked to healthy vaginal microbiomes |
+| *L. iners*     | *Lactobacillus iners* — another common vaginal *Lactobacillus* species |
+| Luminex      | A bead-based assay that measures many proteins (like cytokines) at once |
+| Cytokine     | A small signalling protein released by immune cells |
+| Chemokine    | A type of cytokine that attracts immune cells to a site of infection |
+| IL           | Interleukin (a family of cytokines) |
+| TNFa         | Tumour necrosis factor alpha (a cytokine involved in inflammation) |
+| IFN-Y        | Interferon gamma (a cytokine important for immune defence) |
+| IP-10        | Interferon gamma-induced protein 10 (a chemokine) |
+| MIG          | Monokine induced by gamma interferon (a chemokine) |
+| MIP-3a       | Macrophage inflammatory protein 3 alpha (a chemokine) |
+| Depoprovera  | A hormonal injectable contraceptive (medroxyprogesterone acetate) |
+
+---
+
+## Table 1 — Participant characteristics by study arm
+
+A **Table 1** is the standard way to start a medical or epidemiology paper:
+it shows the characteristics of participants side-by-side by treatment group,
+so readers can see if the groups are well-balanced.
+
+Here we use `gtsummary::tbl_summary()` to summarise the participant metadata
+by arm (yogurt vs unchanged diet), then `add_p()` to test whether any
+differences could be due to chance alone. A p-value < 0.05 suggests a
+real difference between the groups.
+
+```{r}
+#| label: table-1
+#| message: false
+
+library(gtsummary)
+
+metadata |>
+  select(-pid, -sex) |>     # drop the ID column and the constant \`sex\` column
+  tbl_summary(
+    by = arm,               # summarise each column, split by study arm
+    statistic = list(age ~ "{mean} ({sd})")  # age: mean (SD) instead of median (IQR)
+  ) |>
+  add_p(
+    test = list(age ~ "t.test")              # age: t-test instead of Wilcoxon
+  )
+```
+
+### What to look for
+
+- **N (%)** rows for categorical variables like `birth_control` and `education`.
+- **Mean (SD)** or **Median (IQR)** rows for continuous variables like `age` and
+  `days_since_last_sex` (gtsummary automatically picks the right summary).
+- The **p-value** column tells you whether the yogurt group and the
+  unchanged-diet group differ significantly on that variable. If all p-values
+  are large (> 0.05), the randomisation worked well.
+
+```{r}
+#| label: fig-birth-control-by-arm
+#| message: false
+#| fig.cap: "Birth control use in each study arm. p-value from a chi-squared test."
+
+library(ggpubr)
+
+# Chi-squared test on the arm × birth_control table
+chisq <- chisq.test(table(metadata$arm, metadata$birth_control))
+
+# Build the bar plot — counts of each birth control type, side-by-side by arm
+metadata |>
+  count(arm, birth_control) |>
+  ggbarplot(
+    x = "arm",
+    y = "n",
+    fill = "birth_control",
+    position = position_dodge(0.8),
+    xlab = "Study arm",
+    ylab = "Number of participants"
+  ) +
+  annotate("text",
+    x = 1.5, y = max(table(metadata$arm, metadata$birth_control) + 1),
+    label = paste0("chi-squared p = ", round(chisq$p.value, 3)),
+    size = 4
+  )
+```
+
+Because `birth_control` is a **categorical** variable, a Wilcoxon test doesn't
+apply here. Instead we use a **chi-squared test**, which checks whether the
+proportion of Depoprovera users is the same in the yogurt and unchanged-diet
+arms.
+
+---
+
+## Research question — Effect of yogurt on the vaginal microbiome after antibiotics
+
+> **Question:** Does eating yogurt (vs. an unchanged diet) help restore a
+> healthier vaginal microbiome after antibiotic treatment?
+
+To answer this, we look at qPCR measurements of three things:
+
+- **Total bacteria** — overall bacterial load
+- ***L. crispatus*** — a bacterium linked to a healthy vaginal microbiome
+- ***L. iners*** — another common *Lactobacillus* species
+
+We compare **yogurt** vs. **unchanged diet** at each time point (baseline and
+after antibiotic). The plots below show abundance on a log scale (adding 1 to
+handle zeros). A **Wilcoxon rank-sum test** is used to compare the two groups
+at each time point — non-significant p-values (ns) suggest that any visible
+difference could just be due to chance.
+
+```{r}
+#| label: fig-qpcr-facet
+#| message: false
+#| fig.width: 12
+#| fig.height: 6
+#| fig.cap: "qPCR results faceted by bacterium. Boxplots compare yogurt vs unchanged diet at baseline and after antibiotic treatment. Pink = unchanged diet, purple = yogurt. p-values from Wilcoxon rank-sum test."
+
+library(scales)
+
+# Join qPCR with sample IDs, reshape to long format for faceting
+qpcr_long <- sample_ids |>
+  inner_join(qpcr, by = "sample_id") |>
+  pivot_longer(
+    cols = c(qpcr_bacteria, qpcr_crispatus, qpcr_iners),
+    names_to = "bacterium",
+    values_to = "abundance"
+  ) |>
+  mutate(
+    bacterium = recode(bacterium,
+      qpcr_bacteria = "Total bacteria",
+      qpcr_crispatus = "L. crispatus",
+      qpcr_iners = "L. iners"
+    ),
+    time_point = fct_relevel(time_point, "baseline", "after_antibiotic"),
+    abundance = abundance + 1
+  )
+
+# Compute Wilcoxon p-values for each bacterium × time point
+pvals <- qpcr_long |>
+  group_by(bacterium, time_point) |>
+  summarise(
+    p = wilcox.test(abundance ~ arm, data = pick(everything()))$p.value,
+    .groups = "drop"
+  ) |>
+  mutate(
+    star = case_when(
+      p < 0.001 ~ "***",
+      p < 0.01  ~ "**",
+      p < 0.05  ~ "*",
+      TRUE      ~ "ns"
+    ),
+    label = paste0("p = ", format(p, digits = 3), " ", star)
+  )
+
+# Custom colours: unchanged diet = pink, yogurt = purple
+arm_colors <- c("unchanged_diet" = "#D81B60", "yogurt" = "#7B1FA2")
+
+ggplot(qpcr_long, aes(x = time_point, y = abundance)) +
+  geom_boxplot(aes(fill = arm), alpha = 0.5, outlier.shape = NA,
+               width = 0.5, position = position_dodge(width = 0.75)) +
+  geom_point(aes(color = arm),
+             position = position_dodge(width = 0.75),
+             size = 1.2, alpha = 0.6) +
+  facet_wrap(~ bacterium, scales = "free_y") +
+  scale_fill_manual(values = arm_colors,
+                    labels = c("Unchanged diet", "Yogurt")) +
+  scale_color_manual(values = arm_colors, guide = "none") +
+  scale_y_log10(labels = comma) +
+  labs(x = "Time point",
+       y = "Abundance (16S rRNA gene copies + 1)",
+       fill = "Study arm") +
+  geom_text(
+    data = pvals,
+    aes(x = time_point, y = Inf, label = label),
+    vjust = 1.5, size = 3.2, inherit.aes = FALSE
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    strip.background = element_rect(fill = "grey95"),
+    strip.text = element_text(face = "italic")
+  )
+```
+
+### What to look for
+
+- **Total bacteria:** Are the two arms similar at baseline? Does one group show
+  a bigger drop after antibiotics?
+- ***L. crispatus*:** This "good" bacterium often drops after antibiotics.
+  Does it recover more in the yogurt group?
+- ***L. iners*:** This species can be protective or harmful depending on the
+  context. Does yogurt affect it differently than the unchanged diet?
+
+The p-values above each pair of boxes tell you whether the difference between
+yogurt and unchanged diet is statistically significant at that time point.
+
+### Export
+
+You can download standalone copies of the table and the figure from the files
+below. The code chunk saves them using `gtsave()` (for the gtsummary table)
+and `ggsave()` (for the ggplot / ggpubr figure).
+
+```{r}
+#| label: export-files
+#| message: false
+
+# Create the output folder if it doesn't exist already
+dir.create("output", showWarnings = FALSE)
+
+# --- Table 1 as HTML ---
+
+library(gtsummary)
+library(gt)  # for gtsave()
+
+t1 <- metadata |>
+  select(-pid, -sex) |>
+  tbl_summary(
+    by = arm,
+    statistic = list(age ~ "{mean} ({sd})")
+  ) |>
+  add_p(
+    test = list(age ~ "t.test")
+  )
+
+gtsave(as_gt(t1), "output/table-1.html")
+
+# --- Figure 1 as PDF ---
+
+library(ggpubr)
+
+chisq <- chisq.test(table(metadata$arm, metadata$birth_control))
+
+p <- metadata |>
+  count(arm, birth_control) |>
+  ggbarplot(
+    x = "arm",
+    y = "n",
+    fill = "birth_control",
+    position = position_dodge(0.8),
+    xlab = "Study arm",
+    ylab = "Number of participants"
+  ) +
+  annotate("text",
+    x = 1.5, y = max(table(metadata$arm, metadata$birth_control) + 1),
+    label = paste0("chi-squared p = ", round(chisq$p.value, 3)),
+    size = 4
+  )
+
+ggsave("output/figure-1.pdf", plot = p, width = 6, height = 4)
+
+# --- Figure 2 — qPCR facet plot as PDF ---
+
+library(scales)
+
+qpcr_long <- sample_ids |>
+  inner_join(qpcr, by = "sample_id") |>
+  pivot_longer(
+    cols = c(qpcr_bacteria, qpcr_crispatus, qpcr_iners),
+    names_to = "bacterium",
+    values_to = "abundance"
+  ) |>
+  mutate(
+    bacterium = recode(bacterium,
+      qpcr_bacteria = "Total bacteria",
+      qpcr_crispatus = "L. crispatus",
+      qpcr_iners = "L. iners"
+    ),
+    time_point = fct_relevel(time_point, "baseline", "after_antibiotic"),
+    abundance = abundance + 1
+  )
+
+pvals <- qpcr_long |>
+  group_by(bacterium, time_point) |>
+  summarise(
+    p = wilcox.test(abundance ~ arm, data = pick(everything()))$p.value,
+    .groups = "drop"
+  ) |>
+  mutate(
+    star = case_when(
+      p < 0.001 ~ "***",
+      p < 0.01  ~ "**",
+      p < 0.05  ~ "*",
+      TRUE      ~ "ns"
+    ),
+    label = paste0("p = ", format(p, digits = 3), " ", star)
+  )
+
+arm_colors <- c("unchanged_diet" = "#D81B60", "yogurt" = "#7B1FA2")
+
+p2 <- ggplot(qpcr_long, aes(x = time_point, y = abundance)) +
+  geom_boxplot(aes(fill = arm), alpha = 0.5, outlier.shape = NA,
+               width = 0.5, position = position_dodge(width = 0.75)) +
+  geom_point(aes(color = arm),
+             position = position_dodge(width = 0.75),
+             size = 1.2, alpha = 0.6) +
+  facet_wrap(~ bacterium, scales = "free_y") +
+  scale_fill_manual(values = arm_colors,
+                    labels = c("Unchanged diet", "Yogurt")) +
+  scale_color_manual(values = arm_colors, guide = "none") +
+  scale_y_log10(labels = comma) +
+  labs(x = "Time point",
+       y = "Abundance (16S rRNA gene copies + 1)",
+       fill = "Study arm") +
+  geom_text(
+    data = pvals,
+    aes(x = time_point, y = Inf, label = label),
+    vjust = 1.5, size = 3.2, inherit.aes = FALSE
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    strip.background = element_rect(fill = "grey95"),
+    strip.text = element_text(face = "italic")
+  )
+
+ggsave("output/figure-2.pdf", plot = p2, width = 12, height = 6)
+```
+
+| File | Description |
+|------|-------------|
+| [`output/table-1.html`](output/table-1.html) | Table 1 — participant characteristics by study arm (open in your browser) |
+| [`output/figure-1.pdf`](output/figure-1.pdf) | Figure 1 — birth control use by study arm |
+| [`output/figure-2.pdf`](output/figure-2.pdf) | Figure 2 — qPCR results: effect of yogurt on the vaginal microbiome after antibiotics |
+
+---
+
+## Linear model — adjusting for baseline
+
+So far, we compared yogurt vs unchanged diet **separately** at baseline and
+after antibiotics (the boxplots with Wilcoxon tests above). But that approach
+doesn't use all the information we have — each participant was measured twice,
+and knowing their baseline level helps us make a more precise comparison after
+antibiotics.
+
+A **linear model** (`lm()`) lets us ask a more targeted question:
+
+> *After antibiotics, is the yogurt group different from the unchanged diet
+> group — **adjusting for where each person started at baseline**?*
+
+This is better because:
+1. It **accounts for individual differences** — if one person naturally has
+   higher bacterial levels, the model knows that from their baseline.
+2. **One model, one answer** — a single coefficient tells you the yogurt effect.
+3. **More statistical power** — using baseline as information makes it easier
+   to detect a real effect.
+
+### Step 1 — Widen the data
+
+First we reshape the data so each participant has **one row** with separate
+columns for their baseline and after-antibiotic measurements.
+
+```{r}
+#| label: model-widen-data
+#| message: false
+
+# Join qPCR with sample IDs and log-transform
+qpcr_with_arm <- sample_ids |>
+  inner_join(qpcr, by = "sample_id") |>
+  mutate(
+    log_bacteria  = log10(qpcr_bacteria + 1),
+    log_crispatus = log10(qpcr_crispatus + 1),
+    log_iners     = log10(qpcr_iners + 1)
+  )
+
+# Widen: one row per participant, baseline and after_antibiotic as columns
+wide <- qpcr_with_arm |>
+  select(pid, time_point, arm, log_bacteria, log_crispatus, log_iners) |>
+  pivot_wider(
+    names_from = time_point,
+    values_from = c(log_bacteria, log_crispatus, log_iners)
+  )
+
+wide
+```
+
+### Step 2 — Fit the models
+
+We fit one model for each bacterial outcome. The formula says:
+
+> `after_antibiotic ~ arm + baseline`
+>
+> "Predict the after-antibiotic level from the study arm, **controlling for**
+> the baseline level."
+
+```{r}
+#| label: model-fit
+#| message: false
+
+library(gtsummary)
+
+# --- Total bacteria ---
+m_total <- lm(log_bacteria_after_antibiotic ~ arm + log_bacteria_baseline,
+              data = wide)
+
+# --- L. crispatus ---
+m_crispatus <- lm(log_crispatus_after_antibiotic ~ arm + log_crispatus_baseline,
+                  data = wide)
+
+# --- L. iners ---
+m_iners <- lm(log_iners_after_antibiotic ~ arm + log_iners_baseline,
+              data = wide)
+```
+
+### Step 3 — Turn into coefficient tables
+
+`tbl_regression()` takes the fitted model and makes a clean table with the
+coefficient (Beta), 95% confidence interval, and p-value for each predictor.
+
+```{r}
+#| label: model-tables
+#| message: false
+
+# --- Total bacteria ---
+tbl_regression(m_total) |>
+  modify_caption("**Model 1: Total bacteria (after antibiotics)**")
+
+# --- L. crispatus ---
+tbl_regression(m_crispatus) |>
+  modify_caption("**Model 2: L. crispatus (after antibiotics)**")
+
+# --- L. iners ---
+tbl_regression(m_iners) |>
+  modify_caption("**Model 3: L. iners (after antibiotics)**")
+```
+
+### How to read the tables
+
+Each table has four columns:
+
+| Column | What it tells you |
+|---|---|
+| **Characteristic** | The predictor variable in the model |
+| **Beta** | The estimated effect — for `arm: yogurt`, this is the difference between the yogurt group and the unchanged diet group **after antibiotics, adjusting for baseline** |
+| **95% CI** | The range of plausible values for the true effect. If it crosses 0, we can't be sure the effect isn't zero. |
+| **p-value** | How surprised we'd be if there's truly no effect. Small (< 0.05) = statistically significant. Large (> 0.05) = could be due to chance. |
+
+### What the results tell us
+
+| Outcome | Yogurt effect (Beta) | 95% CI | p-value | Plain English |
+|---|---|---|---|---|
+| **Total bacteria** | −0.37 | −0.77 to 0.02 | **0.061** | Yogurt group had *slightly lower* total bacteria after antibiotics — **borderline** not significant |
+| ***L. crispatus*** | +0.82 | −0.40 to 2.0 | **0.2** | Yogurt group had *somewhat higher* crispatus, but the wide confidence interval means we're very uncertain |
+| ***L. iners*** | −0.17 | −0.78 to 0.44 | **0.6** | Basically no difference between groups |
+
+**Key takeaway:** None of the effects reached statistical significance at
+p < 0.05. But the total bacteria result (p = 0.061) is the most interesting
+— it *hints* that yogurt might help reduce bacterial load after antibiotics.
+Adjusting for baseline made this pattern clearer than the simple Wilcoxon
+comparisons in Figure 2.
+
+### Experiment to try
+
+Try adding `age` or `birth_control` as an extra covariate to see if the
+results change:
+
+```r
+# Example: adjust for age as well
+lm(log_bacteria_after_antibiotic ~ arm + log_bacteria_baseline + age,
+   data = wide) |>
+  tbl_regression()
+```
+
+You'd need to join `metadata` into the `wide` table first (they share the `pid`
+column). If the yogurt coefficient barely moves when you add age, that tells
+you the randomisation worked — age is balanced between the two arms.

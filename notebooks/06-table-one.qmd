@@ -21,7 +21,6 @@ table_01 <- read_csv(
 ```
 
 ## Part 1 — Predict (no code)
-
 ```{r}
 table_01
 ```
@@ -30,24 +29,24 @@ For each non-pid column of `table_01` (`arm`, `smoker`, `age`, `education`, `sex
 
 **1. `arm`**
 
-- How will `tbl_summary(by = arm)` summarise it? *Your answer:*
-- What test will `add_p()` pick? *Your answer:*
+- How will `tbl_summary(by = arm)` summarise it? *Your answer:* it will summarize the data in each arm (placebo vs treatment)
+- What test will `add_p()` pick? *Your answer:* median (IQR) + Wilcoxon
 
 **2. `smoker`**
 
-- *Your answer (summary, test):*
+- *Your answer (summary, test):* into smoker or non-smoker categories giving the counts off the total population and the percentage of that, sparse categorical
 
 **3. `age`**
 
-- *Your answer (summary, test):*
+- *Your answer (summary, test):* it will summarize the age in each arm giving the median and IQR, Wilcoxon
 
 **4. `education`**
 
-- *Your answer (summary, test):*
+- *Your answer (summary, test):*  categorical and the counts and percentage of that. fishers exact
 
 **5. `sex`**
 
-- *Your answer (summary, test):*
+- *Your answer (summary, test):* categories of sex which is male vs female (counts and percentage). however, sex is excluded from the table which means there is only one sex. No tests can be conducted
 
 ## Part 2 — Build
 
@@ -62,13 +61,20 @@ table_01 |>
 
 ```{r}
 # step 2: add p-values
-# (modify the previous chunk by adding `|> add_p()`)
+# (modify the previous chunk by adding 
+table_01 |>
+  select(-pid, -sex) |>
+  tbl_summary(by = arm) |> add_p()
 ```
 
 ```{r}
 # step 3: override age to mean (SD) + t-test
-# statistic = list(age ~ "{mean} ({sd})")
-# test = list(age ~ "t.test")
+table_01 |>
+  select(-pid, -sex) |>
+  tbl_summary(by = arm, statistic = list(age ~ "{mean} ({sd})"),
+    digits = list(age ~ 1)
+  ) |>
+  add_p(test = list(age ~ "t.test"))
 ```
 
 ```{r}
